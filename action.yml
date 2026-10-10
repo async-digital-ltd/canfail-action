@@ -1,0 +1,185 @@
+name: Run canfail
+description: Plant the defects a canfail.json declares, and fail when a check does not do what the declaration says it does.
+author: Async Digital Ltd
+
+branding:
+  icon: alert-triangle
+  color: red
+
+inputs:
+  declaration:
+    description: The canfail declaration, relative to working-directory.
+    default: canfail.json
+  working-directory:
+    description: Where the checks run from, and where every break's file is relative to.
+    default: .
+  skip:
+    description: >-
+      The name of a boolean field on a check. Checks that set it to true are
+      dropped before the run, for checks this runner cannot run (for example
+      needsXcode on an ubuntu runner). Empty runs every declared check.
+    default: ''
+  fail-on-mismatch:
+    description: >-
+      Fail the step when a break's verdict differs from its expectedVerdict
+      (catches when the break does not say). Set it to false to record every
+      verdict and decide later, as a ledger that records blind runs does.
+    default: 'true'
+  python-version:
+    description: The Python the tool is installed under.
+    default: '3.13'
+
+outputs:
+  report:
+    description: Path to canfail's JSON report, for a later step to read or upload.
+    value: ${{ steps.run.outputs.report }}
+  declaration:
+    description: Path to the declaration that was actually run, after skip.
+    value: ${{ steps.filter.outputs.declaration }}
+  result:
+    description: >-
+      passed, mismatch (only when fail-on-mismatch is false), or the reason the
+      step failed: dirty-before, install, could-not-run, dirty-after, mismatch.
+    value: ${{ steps.result.outputs.result }}
+
+runs:
+  using: composite
+  steps:
+    # First, so a stage left by an earlier use of this action in the same job
+    # can never be read as this one's.
+    - name: Start
+      shell: bash
+      run: echo "install" > "$RUNNER_TEMP/canfail-action-stage"
+
+    # Every `uses:` here is pinned by commit, with its release tag beside it.
+    # A tag can be moved to other code by whoever can write to that repository.
+    - name: Install Python
+      uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    # canfail breaks real files and puts them back, and the only way to tell a
+    # restore that failed from a tree that was already changed is to know the
+    # tree was clean before anything was planted.
+    - name: Check the tree is clean before planting
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        echo "dirty-before" > "$RUNNER_TEMP/canfail-action-stage"
+        tree_status=$(git status --porcelain --untracked-files=all)
+        if [ -n "$tree_status" ]; then
+          echo "::error title=canfail::The working tree is not clean before planting, so a restore could not be checked afterwards."
+          printf '%s\n' "$tree_status" >&2
+          exit 1
+        fi
+
+    # Into its own environment, from the requirements file this action ships,
+    # with every package named by version and by archive hash. canfail asks for
+    # didrun and restore-verified with a floor and no ceiling, and both decide
+    # verdicts, so pinning canfail alone would let the grading change underneath.
+    - name: Install canfail
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "install" > "$RUNNER_TEMP/canfail-action-stage"
+        python -m venv "$RUNNER_TEMP/canfail-venv"
+        "$RUNNER_TEMP/canfail-venv/bin/python" -m pip install --quiet --disable-pip-version-check \
+          --require-hashes -r "$GITHUB_ACTION_PATH/requirements.txt"
+
+    - name: Choose the checks to run
+      id: filter
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        DECLARATION: ${{ inputs.declaration }}
+        SKIP: ${{ inputs.skip }}
+      run: |
+        set -euo pipefail
+        echo "could-not-run" > "$RUNNER_TEMP/canfail-action-stage"
+        out="$RUNNER_TEMP/canfail-declaration.json"
+        python -I "$GITHUB_ACTION_PATH/canfail_action.py" filter "$DECLARATION" "$out" --skip "$SKIP"
+        echo "declaration=$out" >> "$GITHUB_OUTPUT"
+
+    # NO_COLOR, because every expect and evidence pattern is matched against
+    # plain text, and on a runner CI and GITHUB_ACTIONS are set, which many
+    # tools read as permission to colour their output. The escape codes then
+    # land inside the words a pattern looks for and score a real catch `look`.
+    #
+    # canfail exits 0 or 1 for a verdict and 2 when it could not run. The exit
+    # code cannot say which verdicts it found (blind and wrong-failure both exit
+    # 1), so nothing reads it except to tell "could not run" apart.
+    - name: Plant the declared defects
+      id: run
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        NO_COLOR: '1'
+        DECLARATION: ${{ steps.filter.outputs.declaration }}
+      run: |
+        set -euo pipefail
+        report="$RUNNER_TEMP/canfail-report.json"
+        status=0
+        "$RUNNER_TEMP/canfail-venv/bin/canfail" --cwd "$PWD" --json "$DECLARATION" > "$report" || status=$?
+        echo "canfail exited $status."
+        if [ "$status" -ge 2 ]; then
+          echo "::error title=canfail::canfail could not run (exit $status). This is not a verdict: no check was graded."
+          exit 1
+        fi
+        echo "report=$report" >> "$GITHUB_OUTPUT"
+
+    # Written as an assignment and then a test, because set -e does not apply
+    # to a command substitution inside the arguments to `[`: inline, a git that
+    # failed gives an empty string and the step passes.
+    - name: Check the tree came back
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        echo "dirty-after" > "$RUNNER_TEMP/canfail-action-stage"
+        tree_status=$(git status --porcelain --untracked-files=all)
+        if [ -n "$tree_status" ]; then
+          echo "::error title=canfail::The working tree did not come back after planting, so every later verdict is about a tree nobody declared."
+          printf '%s\n' "$tree_status" >&2
+          exit 1
+        fi
+
+    - name: Hold the verdicts to the declaration
+      shell: bash
+      env:
+        DECLARATION: ${{ steps.filter.outputs.declaration }}
+        REPORT: ${{ steps.run.outputs.report }}
+        FAIL_ON_MISMATCH: ${{ inputs.fail-on-mismatch }}
+      run: |
+        set -euo pipefail
+        echo "mismatch" > "$RUNNER_TEMP/canfail-action-stage"
+        status=0
+        python -I "$GITHUB_ACTION_PATH/canfail_action.py" compare "$DECLARATION" "$REPORT" \
+          >> "$GITHUB_STEP_SUMMARY" || status=$?
+        case "$status" in
+          0) echo "passed" > "$RUNNER_TEMP/canfail-action-stage" ;;
+          1)
+            if [ "$FAIL_ON_MISMATCH" = 'true' ]; then
+              echo "::error title=canfail::A verdict differs from the declaration. The job summary lists which."
+              exit 1
+            fi
+            echo "::warning title=canfail::A verdict differs from the declaration, and fail-on-mismatch is off."
+            ;;
+          *)
+            echo "could-not-run" > "$RUNNER_TEMP/canfail-action-stage"
+            echo "::error title=canfail::The report could not be read against the declaration."
+            exit 1
+            ;;
+        esac
+
+    # Runs whatever happened above, so a caller can tell why the step failed
+    # without parsing its log. The stage file names the last stage entered,
+    # which on a failure is the one that failed.
+    - name: Say how it ended
+      id: result
+      if: always()
+      shell: bash
+      run: |
+        result=$(cat "$RUNNER_TEMP/canfail-action-stage" 2>/dev/null || echo unknown)
+        echo "result=$result" >> "$GITHUB_OUTPUT"
+        echo "canfail-action result: $result"

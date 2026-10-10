@@ -1,0 +1,23 @@
+# What the action installs, and nothing else: canfail, and the two packages it
+# asks for, whose behaviour is part of every verdict it gives. didrun decides
+# whether a run printed the evidence that it ran, and restore-verified puts a
+# planted file back and checks it came back. canfail declares both with a floor
+# and no ceiling, so with canfail pinned alone a new release of either could
+# grade the same declaration differently under the same canfail version.
+#
+# Installed with --require-hashes, so pip refuses any package this file does not
+# name with a hash, and any archive whose hash is not the one written here.
+#
+# To move one, change its version and both of its hashes together, from
+# `curl -s https://pypi.org/pypi/<name>/<version>/json | jq -r '.urls[] |
+# .filename + " " + .digests.sha256'`, check the new release's own dependencies
+# are still only these, and release a new version of the action.
+canfail==0.2.1 \
+    --hash=sha256:aaca5f921a947567d4a1b11b6097097533c606a6a6011fd1cb1c1c91313be2aa \
+    --hash=sha256:cabcffeb9999620c604669b1c7ebdb7efc7e2c9dace8a3c7ba02e378ebc825c6
+didrun==0.1.6 \
+    --hash=sha256:a507ce9e8da7e5382a9937514a52c3c6c2f98901c3f3beb180f85659098dad4d \
+    --hash=sha256:bbf3b1a558174fd7563fbc154359c5efeeb406f7ce0f6b12103a8811563a2394
+restore-verified==0.1.4 \
+    --hash=sha256:cc51b4b84eb3118c8431be96c44fd66e069e8814d7f424b51b92905f20cd3ef7 \
+    --hash=sha256:44d005f19ee33a03424158107669722603ea86a5d11e6bb96378dcedb25b8868

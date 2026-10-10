@@ -1,0 +1,22 @@
+{
+  "checks": [
+    {
+      "name": "Value check",
+      "checkId": "value",
+      "run": "sh check.sh",
+      "timeout": 30,
+      "evidence": {
+        "expect": "checking value.txt"
+      },
+      "breaks": [
+        {
+          "name": "The value goes bad.",
+          "file": "value.txt",
+          "replace": "good",
+          "with": "bad",
+          "expect": "FAIL: value is not good"
+        }
+      ]
+    }
+  ]
+}

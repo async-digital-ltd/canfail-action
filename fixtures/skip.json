@@ -1,0 +1,41 @@
+{
+  "checks": [
+    {
+      "name": "Value check",
+      "checkId": "value",
+      "run": "sh check.sh",
+      "timeout": 30,
+      "evidence": {
+        "expect": "checking value.txt"
+      },
+      "breaks": [
+        {
+          "name": "The value goes bad.",
+          "file": "value.txt",
+          "replace": "good",
+          "with": "bad",
+          "expect": "FAIL: value is not good"
+        }
+      ]
+    },
+    {
+      "name": "Blind check",
+      "checkId": "blind",
+      "run": "echo checking value.txt",
+      "timeout": 30,
+      "evidence": {
+        "expect": "checking value.txt"
+      },
+      "breaks": [
+        {
+          "name": "Nothing looks.",
+          "file": "value.txt",
+          "replace": "good",
+          "with": "bad",
+          "expect": "FAIL"
+        }
+      ],
+      "needsRunner": true
+    }
+  ]
+}
