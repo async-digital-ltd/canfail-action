@@ -48,19 +48,24 @@ jobs:
         if: matrix.case == 'dirty-before'
         run: echo stray > fixtures/stray.txt
 
-      # A copy of the action with one hash changed. It is excluded through
-      # .git/info/exclude, which is never committed, so the copy itself does not
-      # make the tree dirty and the failure has to come from pip.
-      - name: Change one pinned hash in a copy of the action
+      # A copy of the action with canfail's hashes changed. Every one of them:
+      # pip accepts an archive that matches any hash listed for its package, so
+      # changing one of the two (wheel and sdist) leaves the other to match and
+      # the install passes, which is what the first run of this case did. The
+      # copy is excluded through .git/info/exclude, which is never committed, so
+      # it does not make the tree dirty and the failure has to come from pip.
+      - name: Change canfail's pinned hashes in a copy of the action
         if: matrix.case == 'bad-hash'
         run: |
           set -euo pipefail
           mkdir tampered
           cp action.yml canfail_action.py requirements.txt tampered/
           echo tampered/ >> .git/info/exclude
-          sed -i.bak '0,/sha256:a/s//sha256:b/' tampered/requirements.txt
-          if cmp -s requirements.txt tampered/requirements.txt; then
-            echo "The plant changed nothing." >&2
+          zeros=$(printf '0%.0s' $(seq 64))
+          sed -i "/^canfail==/,/^didrun==/ s/sha256:[0-9a-f]*/sha256:$zeros/" tampered/requirements.txt
+          changed=$(diff requirements.txt tampered/requirements.txt | grep -c '^>' || true)
+          if [ "$changed" -ne 2 ]; then
+            echo "The plant changed $changed hash lines, not canfail's 2." >&2
             exit 1
           fi
 
@@ -86,8 +91,8 @@ jobs:
 
       - name: Assert how it ended
         env:
-          OUTCOME: ${{ steps.action.outcome || steps.tampered.outcome }}
-          RESULT: ${{ steps.action.outputs.result || steps.tampered.outputs.result }}
+          OUTCOME: ${{ matrix.case == 'bad-hash' && steps.tampered.outcome || steps.action.outcome }}
+          RESULT: ${{ matrix.case == 'bad-hash' && steps.tampered.outputs.result || steps.action.outputs.result }}
           REPORT: ${{ steps.action.outputs.report }}
           WANT_OUTCOME: ${{ matrix.outcome }}
           WANT_RESULT: ${{ matrix.result }}
