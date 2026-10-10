@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56" width="96" height="96" role="img" aria-label="Seen to Fail">
+  <title>Seen to Fail</title>
+  <!-- The Seen to Fail app-icon tile from async-digital.com
+       (assets/seen-to-fail-glyph.svg), with its corners rounded here because a
+       README has no CSS to clip it. -->
+  <rect width="56" height="56" rx="12" fill="#8B3A2A"/>
+  <g fill="none" stroke="#FDFBF7" stroke-linecap="round"
+     transform="translate(28,28) scale(0.2208) translate(-81,-81.3)">
+    <path d="M8 80 Q81 10.4 154 80" stroke-width="12"/>
+    <path d="M27 96.8 Q81 140 135 96.8" stroke-width="10"/>
+    <path d="M65.4 63.2 L96.6 94.4 M96.6 63.2 L65.4 94.4" stroke-width="12"/>
+  </g>
+</svg>

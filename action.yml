@@ -2,8 +2,11 @@ name: Run canfail
 description: Plant the defects a canfail.json declares, and fail when a check does not do what the declaration says it does.
 author: Async Digital Ltd
 
+# The Marketplace badge takes only a built-in Feather icon and a preset colour.
+# eye-off on red is the nearest to the Seen to Fail mark (an eye with a cross
+# through it, cream on terracotta), which the README shows in full.
 branding:
-  icon: alert-triangle
+  icon: eye-off
   color: red
 
 inputs:

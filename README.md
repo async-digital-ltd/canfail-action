@@ -1,4 +1,8 @@
+<img src="assets/seen-to-fail-glyph.svg" alt="Seen to Fail" width="96" height="96">
+
 # canfail-action
+
+From [Seen to Fail](https://github.com/async-digital-ltd/seen-to-fail), which records whether each automated check has ever been seen to catch a planted defect, and runs its own replay through this action.
 
 A GitHub Action that runs a [canfail](https://pypi.org/project/canfail/) declaration in one step: it plants each declared defect, checks that the check it targets notices, puts the file back, and fails when anything did not go as declared.
 
